@@ -980,7 +980,92 @@ kernel::module_hid_driver! {
 }</code></pre></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 592px; left: 184px; top: 152.5px;" data-name="text-ff065d" data-block-id="11af2450639000f2bb5ee4b5c48cd339"><div class="sl-block-content fragment current-visible" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 13;" data-fragment-index="0"><p><span style="font-size:0.7em">1. Declare the device table for matching devices to the driver</span></p></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 592px; left: 184px; top: 152.5px;" data-block-id="6e568e2183115434f295c02edcba9a9a" data-name="text-b57b75"><div class="sl-block-content fragment current-visible" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 14;" data-fragment-index="1"><p><span style="font-size:0.7em">2. Use the macro that sets up the kernel module</span></p></div></div>
-<div class="sl-block" data-block-type="text" style="height: auto; width: 780px; left: 90px; top: 150.5px;" data-block-id="6da488d9a27da123ac880c821b021e3e" data-name="text-b6c91e"><div class="sl-block-content fragment" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 15;" data-fragment-index="2"><p><span style="font-size:0.7em">3. Implement the <code>hid::Driver</code> trait's <code>report_fixup</code> to make the mouse usable</span></p></div></div></section><section data-id="88acc0af45e7ba6c760cb384d663cfa8" data-auto-animate="" data-transition="slide" data-background-transition="slide">
+<div class="sl-block" data-block-type="text" style="height: auto; width: 780px; left: 90px; top: 150.5px;" data-block-id="6da488d9a27da123ac880c821b021e3e" data-name="text-b6c91e"><div class="sl-block-content fragment" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 15;" data-fragment-index="2"><p><span style="font-size:0.7em">3. Implement the <code>hid::Driver</code> trait's <code>report_fixup</code> to make the mouse usable</span></p></div></div></section><section data-transition="slide" data-background-transition="slide" data-id="72bb43fb9bcd771d9f20a02d36e8db34">
+<div class="sl-block" data-block-type="text" style="width: 806px; left: 77px; top: 19px; height: auto;" data-name="text-29305b" data-block-id="2a0d4790dc00c0d8fd29ca91c4f141a5"><div class="sl-block-content" data-placeholder-tag="h1" data-placeholder-text="Title Text" style="z-index: 10;"><h1><span style="font-size:0.7em">HID Abstractions in Rust</span></h1></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 862.5px; left: 48.75px; top: 100.5px;" data-name="text-8bc11e" data-block-id="edc9389071841d6300b8bec6e26383d2"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 11;"><h3>Rust language features that would help</h3></div></div>
+
+
+
+
+
+
+
+<div class="sl-block" data-block-type="code" style="width: 862px; height: 474px; left: 50px; top: 193.5px;" data-name="code-0057fc" data-block-id="76138eb04fd05133af4f4a45d1c83120"><div class="sl-block-content notranslate" data-highlight-theme="monokai" data-code-frame="none" style="z-index: 12;" data-code-wrap="true"><pre class="rust" style="font-size: 16px; line-height: 19px; tab-size: 4;"><code data-line-numbers="3,5-15|28-33|45-53|58-70|18-27" data-fragment-index="0">/// HID device groups are intended to help categories HID devices based on a set
+/// of common quirks and logic that they will require to function correctly.
+#[repr(u16)]
+pub enum Group {
+    Any = bindings::HID_GROUP_ANY as u16,
+    Generic = bindings::HID_GROUP_GENERIC as u16,
+    Multitouch = bindings::HID_GROUP_MULTITOUCH as u16,
+    SensorHub = bindings::HID_GROUP_SENSOR_HUB as u16,
+    MultitouchWin8 = bindings::HID_GROUP_MULTITOUCH_WIN_8 as u16,
+    RMI = bindings::HID_GROUP_RMI as u16,
+    Wacom = bindings::HID_GROUP_WACOM as u16,
+    LogitechDJDevice = bindings::HID_GROUP_LOGITECH_DJ_DEVICE as u16,
+    Steam = bindings::HID_GROUP_STEAM as u16,
+    Logitech27MHzDevice = bindings::HID_GROUP_LOGITECH_27MHZ_DEVICE as u16,
+    Vivaldi = bindings::HID_GROUP_VIVALDI as u16,
+}
+
+// TODO: use `const_trait_impl` once stabilized:
+//
+// ```
+// impl const From&lt;Group&gt; for u16 {
+//     /// [`Group`] variants are represented by [`u16`] values.
+//     fn from(value: Group) -&gt; Self {
+//         value as Self
+//     }
+// }
+// ```
+impl Group {
+    /// Internal function used to convert [`Group`] variants into [`u16`].
+    const fn into(self) -&gt; u16 {
+        self as u16
+    }
+}
+
+/// Abstraction for the HID device ID structure `struct hid_device_id`.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct DeviceId(bindings::hid_device_id);
+
+impl DeviceId {
+    /// Equivalent to C's `HID_USB_DEVICE` macro.
+    ///
+    /// Create a new `hid::DeviceId` from a group, vendor ID, and device ID
+    /// number.
+    pub const fn new_usb(group: Group, vendor: u32, product: u32) -&gt; Self {
+        Self(bindings::hid_device_id {
+            bus: 0x3, // BUS_USB
+            group: group.into(),
+            vendor,
+            product,
+            driver_data: 0,
+        })
+    }
+}
+
+// ... Driver implementation
+
+kernel::hid_device_table!(
+    HID_TABLE,
+    MODULE_HID_TABLE,
+    &lt;GloriousRust as hid::Driver&gt;::IdInfo,
+    [(
+        hid::DeviceId::new_usb(
+            hid::Group::Generic,
+            bindings::USB_VENDOR_ID_SINOWEALTH,
+            bindings::USB_DEVICE_ID_GLORIOUS_MODEL_O,
+        ),
+        (),
+    )]
+);</code></pre></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 788px; left: 87px; top: 653.5px;" data-name="text-193ffe" data-block-id="a0f1027fc5b8d87858a509806e3023aa"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 13;"><p><a href="https://github.com/rust-lang/rust/issues/143874" target="_blank"><span style="font-size:0.5em">RFC 3762, "Make trait methods callable in const contexts"</span></a></p></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 780px; left: 90px; top: 150.5px;" data-name="text-b6c91e" data-block-id="cd75968962685d9af0fb498a64fce144"><div class="sl-block-content fragment fade-out" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 14;" data-fragment-index="0"><p><span style="font-size:0.7em">1. Wrap <code>bindings::HID_GROUP_*</code> as a <code>Group</code> enum with <code>#[repr(u16)]</code></span></p></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 780px; left: 91px; top: 150.5px;" data-block-id="46e96a300a93509d40009ff02e368fbe" data-name="text-905bbc"><div class="sl-block-content fragment current-visible" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 15;" data-fragment-index="0"><p><span style="font-size:0.7em">2. Need to convert Group to <code>u16</code> for <code>bindings::hid_device_id</code></span></p></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 780px; left: 91px; top: 151.5px;" data-block-id="a8f29db77b29c51960d4f1559e80accb" data-name="text-148db3"><div class="sl-block-content fragment current-visible" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 16;" data-fragment-index="1"><p><span style="font-size:0.7em">3. <code>new_usb</code> can be used in <code>const</code> contexts</span></p></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 813px; left: 73.5px; top: 150.5px;" data-block-id="c7598f41c78407a6bc14b759060fa199" data-name="text-9b5450"><div class="sl-block-content fragment current-visible" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 17;" data-fragment-index="2"><p><span style="font-size:0.7em">4. This declarative macro expands such that <code>new_usb</code> is called from a const context</span></p></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 813px; left: 73.5px; top: 151.5px;" data-block-id="27dd3c08f54117d0e8c85bf8c5ba2902" data-name="text-7d541c"><div class="sl-block-content fragment" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 18;" data-fragment-index="3"><p><span style="font-size:0.7em">5. Cannot implement <code>From</code> trait due to lack of <code>const_trait_impl</code></span></p></div></div></section><section data-id="88acc0af45e7ba6c760cb384d663cfa8" data-auto-animate="" data-transition="slide" data-background-transition="slide">
 <div class="sl-block" data-block-type="text" style="width: 806px; left: 77px; top: 19px; height: auto;" data-name="text-29305b" data-block-id="ea6a6288de8c01d1ec359c61eca60b73"><div class="sl-block-content" data-placeholder-tag="h1" data-placeholder-text="Title Text" style="z-index: 10;"><h1><span style="font-size:0.7em">HID Abstractions in Rust</span></h1></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 862.5px; left: 48.75px; top: 100.5px;" data-name="text-8bc11e" data-block-id="92da22a3bf85a34356fae746a0f6db98"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 11;"><h3><span style="font-size:0.7em">Quickly going over the core code</span></h3></div></div>
 <div class="sl-block" data-block-type="code" style="width: 862px; height: 474px; left: 50px; top: 190.5px;" data-name="code-0057fc" data-block-id="e57deefa39b9e2b879fa9182c36e752c"><div class="sl-block-content notranslate" data-highlight-theme="monokai" data-code-frame="none" style="z-index: 12;" data-code-wrap="true"><pre class="rust" style="font-size: 16px; line-height: 19px; tab-size: 4;"><code data-line-numbers="" data-fragment-index="0">// SPDX-License-Identifier: GPL-2.0
@@ -1506,7 +1591,43 @@ macro_rules! module_hid_driver {
 <div class="sl-block" data-block-type="line" style="width: auto; height: auto; left: 292.5px; top: 559.5px;" data-name="line-3550c9" data-block-id="693a8350ee313d884c2804f1485d3af6"><div class="sl-block-content" data-line-x1="0" data-line-y1="0" data-line-x2="375.0119998080061" data-line-y2="0" data-line-color="#ff0000" data-line-width="2px" data-line-start-type="none" data-line-end-type="line-arrow" data-line-style="solid-rounded" style="z-index: 28;"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" preserveaspectratio="xMidYMid" width="375.0119998080061" height="1" viewbox="0 0 375.0119998080061 1"><path class="line-element" fill="rgba(0,0,0,0)" stroke="#ff0000" stroke-width="2" stroke-linecap="round" d="M0 0 L373.012 0"></path><path stroke="#ff0000" stroke-width="2" d="M 368.26 -6 L 374.26 0 L 368.26 6 L 374.26 0" stroke-linecap="round" stroke-linejoin="round" class="line-end"></path><path class="line-skeleton" fill="rgba(0,0,0,0)" stroke="rgba(0,0,0,0)" d="M0 0 L375.012 0"></path><path class="line-hitarea" fill="rgba(0,0,0,0)" stroke="rgba(0,0,0,0)" stroke-width="15" d="M0 0 L375.012 0"></path></svg></div></div>
 <div class="sl-block" data-block-type="line" style="width: auto; height: auto; left: 626.512px; top: 285px;" data-name="line-e1548b" data-block-id="27622fb1ad2e7fee3022c965e6ee4a42"><div class="sl-block-content" data-line-x1="184.48800000000006" data-line-y1="146" data-line-x2="0" data-line-y2="0" data-line-color="#ff0000" data-line-width="2px" data-line-start-type="none" data-line-end-type="line-arrow" data-line-style="solid-rounded" style="z-index: 29;"><svg xmlns="http://www.w3.org/2000/svg" version="1.1" preserveaspectratio="xMidYMid" width="184.48800000000006" height="146" viewbox="0 0 184.48800000000006 146"><path class="line-element" fill="rgba(0,0,0,0)" stroke="#ff0000" stroke-width="2" stroke-linecap="round" d="M184.488 146 L1.568 1.241"></path><path stroke="#ff0000" stroke-width="2" d="M 1.571 8.895 L 0.59 0.467 L 9.018 -0.515 L 0.59 0.467" stroke-linecap="round" stroke-linejoin="round" class="line-end"></path><path class="line-skeleton" fill="rgba(0,0,0,0)" stroke="rgba(0,0,0,0)" d="M184.488 146 L0 0"></path><path class="line-hitarea" fill="rgba(0,0,0,0)" stroke="rgba(0,0,0,0)" stroke-width="15" d="M184.488 146 L0 0"></path></svg></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 209px; left: 37px; top: 155px;" data-name="text-22b77e" data-block-id="d37788a9e7d13b2bbd07cf47513563e5"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 30;"><p style="text-align:left"><span style="font-size:0.5em"><strong>NOTE:</strong> This is just my own interpretation from our mailing list discussions, and I apologize if this summary is inaccurate in any way.</span></p></div></div>
-<div class="sl-block" data-block-type="text" style="height: auto; width: 249px; left: 347.5px; top: 466.5px;" data-name="text-1b7ddc" data-block-id="339011b925ce0b969b6c98b9fb5ab10f"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 31;"><p><strong>Deadlock</strong></p></div></div></section><section data-id="1515155126b520924d755ddba5a7dcb6" data-transition="slide" data-background-transition="slide">
+<div class="sl-block" data-block-type="text" style="height: auto; width: 249px; left: 347.5px; top: 466.5px;" data-name="text-1b7ddc" data-block-id="339011b925ce0b969b6c98b9fb5ab10f"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 31;"><p><strong>Deadlock</strong></p></div></div></section><section data-transition="slide" data-background-transition="slide" data-id="1ef4b6ae967b9e0a1fa03bda09738a92">
+<div class="sl-block" data-block-type="text" style="width: 806px; left: 77px; top: 19px; height: auto;" data-name="text-29305b" data-block-id="7c02ee3f460ee806c335a0c7e145539e"><div class="sl-block-content" data-placeholder-tag="h1" data-placeholder-text="Title Text" style="z-index: 10;"><h1><span style="font-size:0.7em">HID Abstractions in Rust</span></h1></div></div>
+<div class="sl-block" data-block-type="text" style="height: auto; width: 862.5px; left: 48.75px; top: 100.5px;" data-name="text-8bc11e" data-block-id="a215d72936ee8dc40fb878034dcb31ac"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 11;"><h3>Maintenance with being out-of-tree</h3></div></div>
+
+
+
+
+
+
+
+<div class="sl-block" data-block-type="code" style="width: 862px; height: 519px; left: 49.25px; top: 162.5px;" data-name="code-0057fc" data-block-id="bf2f3289398c1bb53303eef6909ae474"><div class="sl-block-content notranslate" data-highlight-theme="monokai" data-code-frame="none" style="z-index: 12;" data-code-wrap="true"><pre class="diff" style="font-size: 16px; line-height: 19px; tab-size: 4;"><code data-line-numbers="" data-fragment-index="0">diff --git a/rust/kernel/hid.rs b/rust/kernel/hid.rs
+index a93804af8b78..588483bf7204 100644
+--- a/rust/kernel/hid.rs
++++ b/rust/kernel/hid.rs
+@@ -246,7 +246,7 @@ fn as_ref(&amp;self) -&gt; &amp;device::Device&lt;Ctx&gt; {
+         let dev = unsafe { addr_of_mut!((*self.as_raw()).dev) };
+ 
+         // SAFETY: `dev` points to a valid `struct device`.
+-        unsafe { device::Device::as_ref(dev) }
++        unsafe { device::Device::from_raw(dev) }
+     }
+ }
+ 
+@@ -297,12 +297,6 @@ pub fn product(&amp;self) -&gt; u32 {
+ // * `DRIVER_DATA_OFFSET` is the offset to the `driver_data` field.
+ unsafe impl RawDeviceId for DeviceId {
+     type RawType = bindings::hid_device_id;
+-
+-    const DRIVER_DATA_OFFSET: usize = core::mem::offset_of!(bindings::hid_device_id, driver_data);
+-
+-    fn index(&amp;self) -&gt; usize {
+-        self.0.driver_data
+-    }
+ }
+ 
+ /// [`IdTable`] type for HID.</code></pre></div></div>
+</section><section data-id="1515155126b520924d755ddba5a7dcb6" data-transition="slide" data-background-transition="slide">
 <div class="sl-block" data-block-type="text" style="width: 806px; left: 77px; top: 19px; height: auto;" data-name="text-29305b" data-block-id="b0c9ef881fb80132d693f7d047066ad4"><div class="sl-block-content" data-placeholder-tag="h1" data-placeholder-text="Title Text" style="z-index: 10;"><h1><span style="font-size:0.7em">HID Abstractions in Rust</span></h1></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 862.5px; left: 48.75px; top: 100.5px;" data-name="text-8bc11e" data-block-id="b9ae07fb24df7d943c3b8e0fb60b5b59"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 11;"><h3>Questions for follow-up work</h3></div></div>
 <div class="sl-block" data-block-type="text" style="height: auto; width: 806px; left: 77px; top: 186.5px;" data-name="text-dfd83e" data-block-id="2d7cc47cd87dbf745578948ab62869b6"><div class="sl-block-content" data-placeholder-tag="p" data-placeholder-text="Text" style="z-index: 12;"><ul>
@@ -1905,7 +2026,7 @@ Maxime</span></pre></div></div>
 		</div>
 
 		<script>
-			var SLConfig = {"deck": {"id":3448441,"slug":"kangrejos-2025-controlling-monitors","title":"kangrejos-2025-controlling-monitors","description":"","width":960,"height":700,"margin":0.05,"visibility":"self","published_at":null,"sanitize_messages":null,"thumbnail_url":"https://s3.amazonaws.com/media-p.slid.es/thumbnails/5c466501bca3754c139b83e23636c9b4/thumb.jpg?1756768461","view_count":0,"user":{"id":2977928,"username":"binary-eater","name":null,"description":null,"thumbnail_url":"https://www.gravatar.com/avatar/1d538683e7d447999c5d33baa14143e8?s=140\u0026d=https%3A%2F%2Fstatic.slid.es%2Fimages%2Fdefault-profile-picture.png","account_type":"enterprise","team_id":3089,"settings":{"id":57592443,"present_controls":true,"present_upsizing":true,"present_pointer":false,"present_notes":true,"default_deck_tag_id":null},"membership":{"role":"owner","manager":true,"activated":true}},"background_transition":"concave","transition":"concave","theme_id":null,"theme_font":"montserrat","theme_color":"grey-blue","auto_slide_interval":0,"comments_enabled":false,"forking_enabled":false,"rolling_links":false,"center":false,"shuffle":false,"should_loop":false,"share_notes":false,"slide_number":false,"slide_count":59,"rtl":false,"version":2,"collaborative":null,"deck_user_editor_limit":null,"data_updated_at":1757788534136,"font_typekit":"","font_google":"Noto Sans","time_limit":null,"navigation_mode":"default","upsizing_enabled":true,"language":"en","notes":{}}};
+			var SLConfig = {"deck": {"id":3448441,"slug":"kangrejos-2025-controlling-monitors","title":"kangrejos-2025-controlling-monitors","description":"","width":960,"height":700,"margin":0.05,"visibility":"self","published_at":null,"sanitize_messages":null,"thumbnail_url":"https://s3.amazonaws.com/media-p.slid.es/thumbnails/5c466501bca3754c139b83e23636c9b4/thumb.jpg?1756768461","view_count":0,"user":{"id":2977928,"username":"binary-eater","name":null,"description":null,"thumbnail_url":"https://www.gravatar.com/avatar/1d538683e7d447999c5d33baa14143e8?s=140\u0026d=https%3A%2F%2Fstatic.slid.es%2Fimages%2Fdefault-profile-picture.png","account_type":"enterprise","team_id":3089,"settings":{"id":57592443,"present_controls":true,"present_upsizing":true,"present_pointer":false,"present_notes":true,"default_deck_tag_id":null},"membership":{"role":"owner","manager":true,"activated":true}},"background_transition":"concave","transition":"concave","theme_id":null,"theme_font":"montserrat","theme_color":"grey-blue","auto_slide_interval":0,"comments_enabled":false,"forking_enabled":false,"rolling_links":false,"center":false,"shuffle":false,"should_loop":false,"share_notes":false,"slide_number":false,"slide_count":61,"rtl":false,"version":2,"collaborative":null,"deck_user_editor_limit":null,"data_updated_at":1758150863913,"font_typekit":"","font_google":"Noto Sans","time_limit":null,"navigation_mode":"default","upsizing_enabled":true,"language":"en","notes":{}}};
 
 
 			// Use local fonts
